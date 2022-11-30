@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+
+<body>
+    <script>
+        // 1. 纯运行时
+        // 必须要用户传递一个树状对象的数据
+        const obj = {
+            tag: 'div',
+            children: [{
+                tag: 'span',
+                children: 'Hello ziMu'
+            }]
+        }
+
+        const Render = (obj, root) => {
+            const el = document.createElement(obj.tag);
+            if (typeof obj.children === 'string') {
+                const text = document.createTextNode(obj.children)
+                el.appendChild(text)
+            } else if (obj.children) {
+                obj.children.forEach((child) => Render(child, el))
+            }
+            root.appendChild(el)
+        }
+
+        Render(obj, document.body)
+
+        // 2. 运行时 + 编译时
+        // 如果有一个compiler函数，可以将HTML字符串编译成树状数据， 那么用户就既可以传递HTML字符串又可以传递树状数据
+
+        //3. 纯编译时
+        // 如果我们的compiler函数可以直接将HTML字符串编译成命令行代码，那么就只需要一个compiler函数而不需要Render函数了
+    </script>
+</body>
+
+</html>
