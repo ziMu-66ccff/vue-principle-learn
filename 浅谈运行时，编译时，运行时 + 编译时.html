@@ -20,7 +20,7 @@
             }]
         }
 
-        const Render = (obj, root) => {
+        const Render =  (obj, root) => {
             const el = document.createElement(obj.tag);
             if (typeof obj.children === 'string') {
                 const text = document.createTextNode(obj.children)

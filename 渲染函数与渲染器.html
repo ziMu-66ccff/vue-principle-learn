@@ -11,7 +11,7 @@
 <body>
     <script>
         // 渲染函数
-        // tag：标签名，字符串类型
+        // tag：标签名 ，字符串类型 or 函数类型
         // props: { 属性名: 属性值 } or { on时间名：回调函数 } 
         // children: 包含描述子节点的树状数据的数组 or 描述文本子节点的字符串
         function render(tag, props, children) {
@@ -23,7 +23,7 @@
         }
 
         // 渲染器
-        function renderer(vnode, root) {
+        function renderer(vnode, container) {
             const el = document.createElement(vnode.tag);
             // 处理绑定的属性 or 事件
             if (vnode.props) {
@@ -46,8 +46,10 @@
             }
 
             // 将元素挂载在容器下面
-            root.appendChild(el)
+            container.appendChild(el)
         }
+
+
 
         const vnode = render('div', {
             onClick: () => console.log('hello zimu'),
