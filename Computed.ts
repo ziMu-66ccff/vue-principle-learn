@@ -1,12 +1,12 @@
 import {
   EffectFn,
-  createProxy,
+  reactive,
   effect,
   track,
   trigger,
   flushJob,
   jobQueue,
-} from './Responsive';
+} from './Reactive';
 
 // 计算属性computed
 function computed(getter: EffectFn) {
@@ -37,7 +37,7 @@ function computed(getter: EffectFn) {
 }
 
 // 测试;
-const obj = createProxy({
+const obj = reactive({
   name: 'zimu',
   age: 19,
   num: 2,

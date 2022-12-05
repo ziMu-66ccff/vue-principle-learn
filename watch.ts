@@ -1,5 +1,5 @@
-import type { EffectFn } from './Responsive';
-import { effect, createProxy } from './Responsive';
+import type { EffectFn } from './Reactive';
+import { effect, reactive } from './Reactive';
 
 interface WatchOptions {
   immediate: boolean;
@@ -9,7 +9,11 @@ interface WatchOptions {
 
 function watch(
   source: any,
-  cb: (oldValue?: any, newValue?: any, onInvalidate?: () => void) => any,
+  cb: (
+    oldValue?: any,
+    newValue?: any,
+    onInvalidate?: (fn: () => void) => void
+  ) => any,
   options?: WatchOptions
 ) {
   let getter: any;
@@ -76,7 +80,7 @@ function traverse(value: any, seen: Set<any> = new Set()) {
 }
 
 //测试1
-// const obj = createProxy({
+// const obj = reactive({
 //   name: 'wuLuo',
 //   age: 19,
 // });
@@ -90,7 +94,7 @@ function traverse(value: any, seen: Set<any> = new Set()) {
 // obj.age = 6;
 
 //测试2
-// const obj = createProxy({
+// const obj = reactive({
 //   num: 1,
 // });
 // watch(

@@ -69,7 +69,7 @@ function clearUp(effectFn: any) {
 }
 
 //创建响应式代理
-function createProxy(data: any) {
+function reactive(data: any) {
   return new Proxy(data, {
     get(target, key) {
       track(target, key);
@@ -116,7 +116,7 @@ function trigger(target: any, key: string | symbol) {
 }
 
 // 测试;
-// const obj = createProxy({
+// const obj = reactive({
 //   name: 'wuLuo',
 //   age: 19,
 // });
@@ -142,4 +142,4 @@ function trigger(target: any, key: string | symbol) {
 // obj.age++;
 // obj.age++;
 
-export { EffectFn, createProxy, effect, track, trigger, flushJob, jobQueue };
+export { EffectFn, reactive, effect, track, trigger, flushJob, jobQueue };
