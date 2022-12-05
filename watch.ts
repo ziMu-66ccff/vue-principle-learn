@@ -9,12 +9,14 @@ interface WatchOptions {
 
 function watch(
   source: any,
-  cb: (oldValue?: any, newValue?: any) => any,
+  cb: (oldValue?: any, newValue?: any, onInvalidate?: () => void) => any,
   options?: WatchOptions
 ) {
   let getter: any;
   let oldValue: any;
   let newValue: any;
+  // 存储注册的过期回调
+  let clearUp: (() => void) | undefined = undefined;
   // 监视的是getter函数
   if (typeof source === 'function') {
     getter = source;
@@ -23,10 +25,17 @@ function watch(
     getter = () => traverse(source);
   }
 
+  function onInvalidate(fn: () => void) {
+    clearUp = fn;
+  }
   const job = (fn?: EffectFn) => {
     newValue = effectFn();
+    // 在cb()执行前检查是否有过期回调函数
+    if (clearUp) {
+      clearUp();
+    }
     // 当监视的响应式数据发生变化时调用cb()
-    cb(oldValue, newValue);
+    cb(oldValue, newValue, onInvalidate);
     // 修改旧值，此时的新值是以后的旧值
     oldValue = newValue;
   };
