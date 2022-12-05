@@ -1,6 +1,7 @@
 // 类型声明
 interface Options {
   scheduler?: (fn: EffectFn) => void;
+  lazy?: boolean;
 }
 
 interface EffectFn {
@@ -33,7 +34,7 @@ function flushJob() {
 }
 
 // effect函数， 用于注册副作用函数
-function effect(fn: () => void, options: Options) {
+function effect(fn: () => any, options?: Options) {
   const effectFn: EffectFn = () => {
     clearUp(effectFn);
     // 存储当前的副作用
@@ -41,16 +42,22 @@ function effect(fn: () => void, options: Options) {
     // 将当前（外层）副作用保存到副作用栈里面
     effectStarck.push(effectFn);
     // 执行副作用
-    fn();
+    let res = fn();
     // 副作用执行完毕后，将当前（内层）副作用从副作用栈弹出
     effectStarck.pop();
     // 重新指向其外层的副作用
     activeEffect = effectStarck[effectStarck.length - 1];
+    return res;
   };
   // 存储保存的有该副作用函数的依赖集合
   effectFn.deps = [];
   effectFn.options = options;
-  effectFn();
+  // 判断副作用是否为懒执行
+  if (effectFn.options?.lazy) {
+    return effectFn;
+  } else {
+    effectFn();
+  }
 }
 
 // clearUp 将副作用函数从其依赖集合中删除
@@ -134,3 +141,5 @@ obj.age++;
 obj.age++;
 obj.age++;
 obj.age++;
+
+export { EffectFn, createProxy, effect, track, trigger, flushJob, jobQueue };
