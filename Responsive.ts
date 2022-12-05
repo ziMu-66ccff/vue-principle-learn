@@ -115,31 +115,31 @@ function trigger(target: any, key: string | symbol) {
   });
 }
 
-// 测试
-const obj = createProxy({
-  name: 'wuLuo',
-  age: 19,
-});
-effect(
-  () => {
-    console.log(obj.age);
-  },
-  {
-    // 调度器
-    scheduler(fn) {
-      jobQueue.add(fn);
-      flushJob();
-    },
-  }
-);
-obj.age++;
-obj.age++;
-obj.age++;
-obj.age++;
-obj.age++;
-obj.age++;
-obj.age++;
-obj.age++;
-obj.age++;
+// 测试;
+// const obj = createProxy({
+//   name: 'wuLuo',
+//   age: 19,
+// });
+// effect(
+//   () => {
+//     console.log(obj.age);
+//   },
+//   {
+//     // 调度器
+//     scheduler(fn) {
+//       jobQueue.add(fn);
+//       flushJob();
+//     },
+//   }
+// );
+// obj.age++;
+// obj.age++;
+// obj.age++;
+// obj.age++;
+// obj.age++;
+// obj.age++;
+// obj.age++;
+// obj.age++;
+// obj.age++;
 
 export { EffectFn, createProxy, effect, track, trigger, flushJob, jobQueue };

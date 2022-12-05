@@ -17,10 +17,8 @@ function computed(getter: EffectFn) {
   const effectFn = effect(getter, {
     lazy: true,
     scheduler() {
-      if (!isDirty) {
-        isDirty = true;
-        trigger(obj, 'value');
-      }
+      isDirty = true;
+      trigger(obj, 'value');
     },
   }) as EffectFn;
 
@@ -38,7 +36,7 @@ function computed(getter: EffectFn) {
   return obj;
 }
 
-// 测试
+// 测试;
 const obj = createProxy({
   name: 'zimu',
   age: 19,
@@ -60,6 +58,7 @@ effect(
   }
 );
 
+obj.age++;
 obj.age++;
 obj.age++;
 obj.age++;
