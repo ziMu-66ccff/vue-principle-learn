@@ -14,6 +14,7 @@ interface Vnode {
   tag: string;
   props?: any;
   children?: any;
+  el?: VElement;
 }
 
 interface VElement extends Element {
@@ -26,7 +27,8 @@ function createRenderer(options: Options) {
   const { createElement, setElementText, insert, patchProps } = options;
 
   function mountElement(vnode: Vnode, container: VElement) {
-    const el = createElement(vnode.tag);
+    // 在虚拟dom和对应的真实dom中建立一个联系
+    const el = (vnode.el = createElement(vnode.tag));
     // 添加属性
     if (vnode.props) {
       for (const key in vnode.props) {
@@ -61,10 +63,17 @@ function createRenderer(options: Options) {
       patch(container._vnode, vnode, container);
     } else {
       if (container._vnode) {
-        container.innerHTML = '';
+        unmount(container._vnode);
       }
     }
     container._vnode = vnode;
+  }
+
+  function unmount(vnode: Vnode) {
+    const parent = vnode.el?.parentNode;
+    if (parent) {
+      parent.removeChild(vnode.el as VElement);
+    }
   }
 
   return {
