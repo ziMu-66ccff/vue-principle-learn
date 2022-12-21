@@ -1,5 +1,5 @@
 interface Options {
-  createElement: (tag: string) => VElement;
+  createElement: (type: any) => VElement;
   setElementText: (el: VElement, text: string) => void;
   insert: (el: VElement, parent: VElement, anchor?: any) => void;
   patchProps: (
@@ -11,7 +11,7 @@ interface Options {
 }
 
 interface Vnode {
-  tag: string;
+  type: any;
   props?: any;
   children?: any;
   el?: VElement;
@@ -19,6 +19,7 @@ interface Vnode {
 
 interface VElement extends Element {
   _vnode?: Vnode | null;
+  vei?: any;
 }
 
 // 创建适用于不同环境的渲染器
@@ -28,7 +29,7 @@ function createRenderer(options: Options) {
 
   function mountElement(vnode: Vnode, container: VElement) {
     // 在虚拟dom和对应的真实dom中建立一个联系
-    const el = (vnode.el = createElement(vnode.tag));
+    const el = (vnode.el = createElement(vnode.type));
     // 添加属性
     if (vnode.props) {
       for (const key in vnode.props) {
@@ -51,12 +52,31 @@ function createRenderer(options: Options) {
     newVnode: Vnode,
     container: VElement
   ) {
-    if (!oldVnode) {
-      mountElement(newVnode, container);
-    } else {
-      // 需要更新
+    if (oldVnode && oldVnode.type != newVnode.type) {
+      unmount(oldVnode);
+      oldVnode = null;
     }
+    // 获取type属性, 用来判断vnode类型
+    const { type } = newVnode;
+
+    // 处理普通标签
+    if (typeof type === 'string') {
+      if (!oldVnode) {
+        mountElement(newVnode, container);
+      } else {
+        patchElement();
+      }
+    }
+    // 处理组件
+    // if (typeof type === 'object') {
+    // }
+    // 处理其他类型的vnode
+    // if (typeof type === 'xxx') {
+    // }
   }
+
+  // 更新元素
+  function patchElement() {}
 
   function render(vnode: Vnode | null, container: VElement) {
     if (vnode) {
@@ -85,6 +105,7 @@ function createRenderer(options: Options) {
 function shouldSetAsProps(el: VElement, key: string, value: string) {
   // 只读属性特殊处理
   if (key === 'form' && el.tagName === 'INPUT') return false;
+  // 判断el中是否有key这个DOM属性
   return key in el;
 }
 
@@ -115,10 +136,10 @@ function normalizeClass(oldClass: any) {
   return newClass;
 }
 
-// 用于浏览器平台的渲染器
+// 用于浏览器环境的渲染器
 export const DOMRender = createRenderer({
-  createElement(tag: string) {
-    return document.createElement(tag);
+  createElement(type: any) {
+    return document.createElement(type);
   },
   setElementText(el: VElement, text: string) {
     el.innerHTML = text;
@@ -127,8 +148,36 @@ export const DOMRender = createRenderer({
     parent.insertBefore(el, anchor);
   },
   patchProps(el, key, prevValue, nextValue) {
+    // 绑定事件
+    if (/^on/.test(key)) {
+      const invokers = el.vei ?? (el.vei = {});
+      let invoker: any = el.vei[key];
+      const name = key.slice(2).toLowerCase();
+      if (nextValue) {
+        if (!invoker) {
+          invoker = el.vei[key] = (e: any) => {
+            // 如果事件被触发的事件早于事件处理函数被绑定的事件，则不执行事件处理函数
+            if (e.timeStamp < invoker.attached) return;
+            if (Array.isArray(invoker.value)) {
+              invoker.value.forEach((fn: any) => fn(e));
+            } else {
+              invoker.value(e);
+            }
+          };
+          invoker.value = nextValue;
+          // attached属性存储事件处理函数被绑定的时间
+          invoker.attached = performance.now();
+          el.addEventListener(name, invoker);
+        } else {
+          invoker.value = nextValue;
+        }
+      } else if (invoker) {
+        el.removeEventListener(name, invoker);
+      }
+    }
+    // 绑定属性
     // 为了性能，对class属性特殊处理
-    if (key === 'class') {
+    else if (key === 'class') {
       el.className = nextValue ?? '';
     } else if (shouldSetAsProps(el, key, nextValue)) {
       const type = typeof el[key];

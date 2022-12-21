@@ -8,7 +8,7 @@ function ref(val: any) {
   Object.defineProperty(wrapper, '_isRef', {
     value: true,
   });
-  return reactive(val);
+  return reactive(wrapper);
 }
 
 function toRef(obj: any, key: string) {
