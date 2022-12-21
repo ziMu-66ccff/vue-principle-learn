@@ -2,6 +2,9 @@ interface Options {
   createElement: (type: any) => VElement;
   setElementText: (el: VElement, text: string) => void;
   insert: (el: VElement, parent: VElement, anchor?: any) => void;
+  createText: (text: string) => any;
+  createComment: (text: string) => any;
+  setText: (el: VElement, text: string) => void;
   patchProps: (
     el: VElement,
     key: string,
@@ -22,10 +25,106 @@ interface VElement extends Element {
   vei?: any;
 }
 
+const Text = Symbol();
+const Comment = Symbol();
+const Fragment = Symbol();
+
 // 创建适用于不同环境的渲染器
 function createRenderer(options: Options) {
   // 获取浏览器环境的相关操作API
-  const { createElement, setElementText, insert, patchProps } = options;
+  const {
+    createElement,
+    setElementText,
+    insert,
+    createText,
+    createComment,
+    setText,
+    patchProps,
+  } = options;
+
+  function render(vnode: Vnode | null, container: VElement) {
+    if (vnode) {
+      patch(container._vnode, vnode, container);
+    } else {
+      if (container._vnode) {
+        unmount(container._vnode);
+      }
+    }
+    container._vnode = vnode;
+  }
+
+  function patch(
+    oldVnode: Vnode | undefined | null,
+    newVnode: Vnode,
+    container: VElement
+  ) {
+    if (oldVnode && oldVnode.type != newVnode.type) {
+      unmount(oldVnode);
+      oldVnode = null;
+    }
+    // 获取type属性, 用来判断vnode类型
+    const { type } = newVnode;
+
+    // 处理普通标签
+    if (typeof type === 'string') {
+      if (!oldVnode) {
+        mountElement(newVnode, container);
+      } else {
+        patchElement(oldVnode, newVnode);
+      }
+    }
+    // 处理文本节点
+    else if (type === Text) {
+      if (!oldVnode) {
+        const el = (newVnode.el = createText(newVnode.children));
+        insert(container, el);
+      } else {
+        const el = (newVnode.el = oldVnode.el as VElement);
+        if (oldVnode.children != newVnode.children) {
+          setText(el, newVnode.children);
+        }
+      }
+    }
+    // 处理注释节点
+    else if (type === Comment) {
+      if (!oldVnode) {
+        const el = (newVnode.el = createComment(newVnode.children));
+        insert(container, el);
+      } else {
+        const el = (newVnode.el = oldVnode.el as VElement);
+        if (oldVnode.children != newVnode.children) {
+          setText(el, newVnode.children);
+        }
+      }
+    }
+    // 处理Fragment虚拟节点
+    else if (type === Fragment) {
+      if (!oldVnode) {
+        newVnode.children.forEach((vnode: Vnode) =>
+          patch(null, vnode, container)
+        );
+      } else {
+        patchChildren(oldVnode, newVnode, container);
+      }
+    }
+
+    // 处理组件
+    // if (typeof type === 'object') {
+    // }
+    // 处理其他类型的vnode
+    // if (typeof type === 'xxx') {
+    // }
+  }
+
+  function unmount(vnode: Vnode) {
+    if (vnode.type === Fragment) {
+      vnode.children.forEach((vnode: Vnode) => unmount(vnode));
+    }
+    const parent = vnode.el?.parentNode;
+    if (parent) {
+      parent.removeChild(vnode.el as VElement);
+    }
+  }
 
   function mountElement(vnode: Vnode, container: VElement) {
     // 在虚拟dom和对应的真实dom中建立一个联系
@@ -47,93 +146,54 @@ function createRenderer(options: Options) {
     insert(el, container);
   }
 
-  function patch(
-    oldVnode: Vnode | undefined | null,
-    newVnode: Vnode,
+  // 更新元素
+  function patchElement(oldVnode: Vnode, newVnode: Vnode) {
+    const el = (newVnode.el = oldVnode.el as VElement);
+    const oldProps = oldVnode.props;
+    const newProps = newVnode.props;
+    // 更新Props
+    for (const key in newProps) {
+      if (oldProps[key] != newProps[key]) {
+        patchProps(el, key, oldProps[key], newProps[key]);
+      }
+    }
+    for (const key in oldProps) {
+      if (!(key in newProps)) {
+        patchProps(el, key, oldProps[key], null);
+      }
+    }
+    // 更新children
+    patchChildren(oldVnode.children, newVnode.children, el);
+  }
+
+  function patchChildren(
+    oldChildren: any,
+    newChildren: any,
     container: VElement
   ) {
-    if (oldVnode && oldVnode.type != newVnode.type) {
-      unmount(oldVnode);
-      oldVnode = null;
-    }
-    // 获取type属性, 用来判断vnode类型
-    const { type } = newVnode;
-
-    // 处理普通标签
-    if (typeof type === 'string') {
-      if (!oldVnode) {
-        mountElement(newVnode, container);
-      } else {
-        patchElement();
+    if (typeof newChildren === 'string') {
+      if (Array.isArray(oldChildren)) {
+        oldChildren.forEach((vnode) => unmount(vnode));
       }
-    }
-    // 处理组件
-    // if (typeof type === 'object') {
-    // }
-    // 处理其他类型的vnode
-    // if (typeof type === 'xxx') {
-    // }
-  }
-
-  // 更新元素
-  function patchElement() {}
-
-  function render(vnode: Vnode | null, container: VElement) {
-    if (vnode) {
-      patch(container._vnode, vnode, container);
+      setElementText(container, newChildren);
+    } else if (Array.isArray(newChildren)) {
+      if (Array.isArray(oldChildren)) {
+        // 后面会用diff算法优化
+        oldChildren.forEach((vnode) => unmount(vnode));
+      }
+      setElementText(container, '');
+      newChildren.forEach((vnode) => patch(null, vnode, container));
     } else {
-      if (container._vnode) {
-        unmount(container._vnode);
+      if (Array.isArray(oldChildren)) {
+        oldChildren.forEach((vnode) => unmount(vnode));
       }
-    }
-    container._vnode = vnode;
-  }
-
-  function unmount(vnode: Vnode) {
-    const parent = vnode.el?.parentNode;
-    if (parent) {
-      parent.removeChild(vnode.el as VElement);
+      setElementText(container, '');
     }
   }
 
   return {
     render,
   };
-}
-
-// 设置DOMPropties
-function shouldSetAsProps(el: VElement, key: string, value: string) {
-  // 只读属性特殊处理
-  if (key === 'form' && el.tagName === 'INPUT') return false;
-  // 判断el中是否有key这个DOM属性
-  return key in el;
-}
-
-// 将class的多种类型（字符串，对象，数组）的值转换为字符串
-function normalizeClass(oldClass: any) {
-  let newClass: string = '';
-  const type = typeof oldClass;
-
-  function handleObeject(value: any) {
-    for (const key in value) {
-      if (value[key]) {
-        newClass += key + '';
-      }
-    }
-  }
-
-  function handleArray(value: any) {
-    value.forEach((child: any) => {
-      const type = typeof child;
-      if (type === 'object') handleObeject(child);
-      if (type === 'string') newClass += child + '';
-    });
-  }
-
-  if (type === 'object') handleObeject(oldClass);
-  if (type === 'string') newClass += oldClass;
-  if (Array.isArray(oldClass)) handleArray(oldClass);
-  return newClass;
 }
 
 // 用于浏览器环境的渲染器
@@ -146,6 +206,15 @@ export const DOMRender = createRenderer({
   },
   insert(el: VElement, parent: VElement, anchor = null) {
     parent.insertBefore(el, anchor);
+  },
+  createText(text: string) {
+    return document.createTextNode(text);
+  },
+  createComment(text: string) {
+    return document.createComment(text);
+  },
+  setText(el: VElement, text: string) {
+    el.nodeValue = text;
   },
   patchProps(el, key, prevValue, nextValue) {
     // 绑定事件
@@ -192,3 +261,38 @@ export const DOMRender = createRenderer({
     }
   },
 });
+
+// 设置DOMPropties
+function shouldSetAsProps(el: VElement, key: string, value: string) {
+  // 只读属性特殊处理
+  if (key === 'form' && el.tagName === 'INPUT') return false;
+  // 判断el中是否有key这个DOM属性
+  return key in el;
+}
+
+// 将class的多种类型（字符串，对象，数组）的值转换为字符串
+function normalizeClass(oldClass: any) {
+  let newClass: string = '';
+  const type = typeof oldClass;
+
+  function handleObeject(value: any) {
+    for (const key in value) {
+      if (value[key]) {
+        newClass += key + '';
+      }
+    }
+  }
+
+  function handleArray(value: any) {
+    value.forEach((child: any) => {
+      const type = typeof child;
+      if (type === 'object') handleObeject(child);
+      if (type === 'string') newClass += child + '';
+    });
+  }
+
+  if (type === 'object') handleObeject(oldClass);
+  if (type === 'string') newClass += oldClass;
+  if (Array.isArray(oldClass)) handleArray(oldClass);
+  return newClass;
+}
