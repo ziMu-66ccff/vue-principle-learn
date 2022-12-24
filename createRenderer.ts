@@ -184,45 +184,125 @@ function createRenderer(options: Options) {
     else if (Array.isArray(newChildren)) {
       // 旧节点是一组子节点时
       if (Array.isArray(oldChildren)) {
-        // 简单diff算法优化
-        let lastIndex = 0;
-        for (let i = 0; i < newChildren.length; i++) {
-          const newVnode = newChildren[i];
-          let find = false;
-          for (let j = 0; j < oldChildren.length; j++) {
-            const oldVnode = oldChildren[j];
-            if (newVnode.key === oldVnode.key) {
-              patch(oldVnode, newVnode, container);
-              if (j < lastIndex) {
-                const preVnode = newChildren[i - 1];
-                if (preVnode) {
-                  const anchor = preVnode.el.nextSibling;
-                  insert(newChildren[i], container, anchor);
-                }
-              } else {
-                lastIndex = j;
-              }
-              break;
+        // // 1.利用简单diff算法优化
+        // let lastIndex = 0;
+        // for (let i = 0; i < newChildren.length; i++) {
+        //   const newVnode = newChildren[i];
+        //   let find = false;
+        //   for (let j = 0; j < oldChildren.length; j++) {
+        //     const oldVnode = oldChildren[j];
+        //     if (newVnode.key === oldVnode.key) {
+        //       patch(oldVnode, newVnode, container);
+        //       if (j < lastIndex) {
+        //         const preVnode = newChildren[i - 1];
+        //         if (preVnode) {
+        //           const anchor = preVnode.el.nextSibling;
+        //           insert(newChildren[i], container, anchor);
+        //         }
+        //       } else {
+        //         lastIndex = j;
+        //       }
+        //       break;
+        //     }
+        //     // 执行到这里时，find依旧为false，说明在旧子节点里面没有找到一样的key,则需要添加（挂载）新的子节点
+        //     if (!find) {
+        //       const preVnode = newChildren[i - 1];
+        //       let anchor: any = null;
+        //       if (preVnode) {
+        //         anchor = preVnode.el.nextSibling;
+        //       } else {
+        //         anchor = container.firstChild;
+        //       }
+        //       patch(null, newVnode, container, anchor);
+        //     }
+        //   }
+        // }
+        // // 删除新的子节点中已经不存在的旧的子节点
+        // for (let i = 0; i < oldChildren.length; i++) {
+        //   const oldVnode = oldChildren[i];
+        //   let has = newChildren.find((vnode) => vnode.key === oldVnode.key);
+        //   if (!has) {
+        //     unmount(oldVnode);
+        //   }
+        // }
+
+        // 2.利用双端对比diff算法进行优化
+        patchkeyedChildren(oldChildren, newChildren, container);
+
+        // 双端对比diff算法
+        function patchkeyedChildren(
+          oldChildren: any,
+          newChildren: any,
+          container: VElement
+        ) {
+          // 四种索引值
+          let oldStartIndex = 0;
+          let newStartIndex = 0;
+          let oldEndIndex = oldChildren.length - 1;
+          let newEndIndex = newChildren.length - 1;
+          // 四种索引值对应的虚拟node
+          let oldStartVnode = oldChildren[oldStartIndex];
+          let newStartVnode = newChildren[newStartIndex];
+          let oldEndVnode = oldChildren[oldEndIndex];
+          let newEndVnode = newChildren[newEndIndex];
+
+          while (oldStartIndex <= oldEndIndex && newStartIndex <= newEndIndex) {
+            // 如果旧头尾节点为undifined，则意味着已经被处理过了，则直接跳过
+            if (!oldStartVnode) {
+              oldStartVnode = oldChildren[++oldStartIndex];
+            } else if (!oldEndVnode) {
+              oldEndVnode = oldChildren[--oldEndIndex];
+              // 进行双端的四种比较
+            } else if (oldStartVnode.key === newStartVnode.key) {
+              patch(oldStartVnode, newStartVnode, container);
+              oldStartVnode = oldChildren[++oldStartIndex];
+              newStartVnode = newChildren[++newStartIndex];
+            } else if (oldEndVnode.key === newEndVnode.key) {
+              patch(oldEndVnode, newEndVnode, container);
+              oldEndVnode = oldChildren[--oldEndIndex];
+              newEndVnode = newChildren[--newEndIndex];
+            } else if (oldStartVnode.key === newEndVnode.key) {
+              patch(oldStartVnode, newEndVnode, container);
+              insert(oldStartVnode.el, container, oldEndVnode.el.nextSibling);
+              oldStartVnode = oldChildren[++oldStartIndex];
+              newEndVnode = newChildren[--newEndIndex];
+            } else if (oldEndVnode.key === newStartVnode.key) {
+              patch(oldEndVnode, newStartVnode, container);
+              insert(oldEndVnode.el, container, oldStartVnode.el);
+              oldEndVnode = oldChildren[--oldEndIndex];
+              newStartVnode = newChildren[++newStartIndex];
             }
-            // 执行到这里时，find依旧为false，说明在旧子节点里面没有找到一样的key,则需要添加（挂载）新的子节点
-            if (!find) {
-              const preVnode = newChildren[i - 1];
-              let anchor: any = null;
-              if (preVnode) {
-                anchor = preVnode.el.nextSibling;
+            // 四种比较都没找到可以复用的节点，则拿着新头节点来遍历旧节点，来寻找可复用的节点
+            else {
+              const newStartInOldIndex = oldChildren.findIndex(
+                (vnode: Vnode) => vnode.key === newStartVnode.key
+              );
+              if (newStartInOldIndex > 0) {
+                const vnodeToMove = oldChildren[newStartInOldIndex];
+                patch(vnodeToMove, newStartVnode, container);
+                insert(vnodeToMove.el, container, oldStartVnode.el);
+                oldChildren[newStartInOldIndex] = undefined;
               } else {
-                anchor = container.firstChild;
+                patch(null, newStartVnode, oldStartVnode.el);
               }
-              patch(null, newVnode, container, anchor);
+              newStartVnode = newChildren[++newStartIndex];
             }
           }
-        }
-        // 删除新的子节点中已经不存在的旧的子节点
-        for (let i = 0; i < oldChildren.length; i++) {
-          const oldVnode = oldChildren[i];
-          let has = newChildren.find((vnode) => vnode.key === oldVnode.key);
-          if (!has) {
-            unmount(oldVnode);
+          // 循环结束后，检查是否有漏掉的需要添加（挂载）的新节点 or 需要卸载的旧节点
+          if (oldStartIndex > oldEndIndex && newStartIndex <= newEndIndex) {
+            for (let i = newStartIndex; i <= newEndIndex; i++) {
+              const anchor = newChildren[newEndIndex + 1]
+                ? newChildren[newEndIndex]
+                : null;
+              patch(null, newChildren[i], container, anchor);
+            }
+          } else if (
+            newStartIndex > newEndIndex &&
+            oldStartIndex <= oldEndIndex
+          ) {
+            for (let i = oldStartIndex; i <= oldEndIndex; i++) {
+              unmount(oldChildren[i]);
+            }
           }
         }
       }
