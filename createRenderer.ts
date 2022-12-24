@@ -18,6 +18,7 @@ interface Vnode {
   props?: any;
   children?: any;
   el?: VElement;
+  key?: any;
 }
 
 interface VElement extends Element {
@@ -56,7 +57,8 @@ function createRenderer(options: Options) {
   function patch(
     oldVnode: Vnode | undefined | null,
     newVnode: Vnode,
-    container: VElement
+    container: VElement,
+    anchor: any = null
   ) {
     if (oldVnode && oldVnode.type != newVnode.type) {
       unmount(oldVnode);
@@ -68,7 +70,7 @@ function createRenderer(options: Options) {
     // 处理普通标签
     if (typeof type === 'string') {
       if (!oldVnode) {
-        mountElement(newVnode, container);
+        mountElement(newVnode, container, anchor);
       } else {
         patchElement(oldVnode, newVnode);
       }
@@ -126,7 +128,7 @@ function createRenderer(options: Options) {
     }
   }
 
-  function mountElement(vnode: Vnode, container: VElement) {
+  function mountElement(vnode: Vnode, container: VElement, anchor: any = null) {
     // 在虚拟dom和对应的真实dom中建立一个联系
     const el = (vnode.el = createElement(vnode.type));
     // 添加属性
@@ -143,7 +145,7 @@ function createRenderer(options: Options) {
       vnode.children.forEach((child) => patch(null, child, el));
     }
     // 执行挂载操作
-    insert(el, container);
+    insert(el, container, anchor);
   }
 
   // 更新元素
@@ -171,19 +173,65 @@ function createRenderer(options: Options) {
     newChildren: any,
     container: VElement
   ) {
+    // 对文本子节点的更新
     if (typeof newChildren === 'string') {
       if (Array.isArray(oldChildren)) {
         oldChildren.forEach((vnode) => unmount(vnode));
       }
       setElementText(container, newChildren);
-    } else if (Array.isArray(newChildren)) {
+    }
+    // 对一组子节点的更新
+    else if (Array.isArray(newChildren)) {
+      // 旧节点是一组子节点时
       if (Array.isArray(oldChildren)) {
-        // 后面会用diff算法优化
-        oldChildren.forEach((vnode) => unmount(vnode));
+        // 简单diff算法优化
+        let lastIndex = 0;
+        for (let i = 0; i < newChildren.length; i++) {
+          const newVnode = newChildren[i];
+          let find = false;
+          for (let j = 0; j < oldChildren.length; j++) {
+            const oldVnode = oldChildren[j];
+            if (newVnode.key === oldVnode.key) {
+              patch(oldVnode, newVnode, container);
+              if (j < lastIndex) {
+                const preVnode = newChildren[i - 1];
+                if (preVnode) {
+                  const anchor = preVnode.el.nextSibling;
+                  insert(newChildren[i], container, anchor);
+                }
+              } else {
+                lastIndex = j;
+              }
+              break;
+            }
+            // 执行到这里时，find依旧为false，说明在旧子节点里面没有找到一样的key,则需要添加（挂载）新的子节点
+            if (!find) {
+              const preVnode = newChildren[i - 1];
+              let anchor: any = null;
+              if (preVnode) {
+                anchor = preVnode.el.nextSibling;
+              } else {
+                anchor = container.firstChild;
+              }
+              patch(null, newVnode, container, anchor);
+            }
+          }
+        }
+        // 删除新的子节点中已经不存在的旧的子节点
+        for (let i = 0; i < oldChildren.length; i++) {
+          const oldVnode = oldChildren[i];
+          let has = newChildren.find((vnode) => vnode.key === oldVnode.key);
+          if (!has) {
+            unmount(oldVnode);
+          }
+        }
       }
+      // 旧节点是文本子节点 or 空子节点
       setElementText(container, '');
       newChildren.forEach((vnode) => patch(null, vnode, container));
-    } else {
+    }
+    // 对空子节点的更新
+    else {
       if (Array.isArray(oldChildren)) {
         oldChildren.forEach((vnode) => unmount(vnode));
       }
