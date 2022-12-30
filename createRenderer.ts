@@ -192,6 +192,7 @@ function createRenderer(options: Options) {
         //   for (let j = 0; j < oldChildren.length; j++) {
         //     const oldVnode = oldChildren[j];
         //     if (newVnode.key === oldVnode.key) {
+        //       find = true;
         //       patch(oldVnode, newVnode, container);
         //       if (j < lastIndex) {
         //         const preVnode = newChildren[i - 1];
@@ -226,83 +227,188 @@ function createRenderer(options: Options) {
         //   }
         // }
 
-        // 2.利用双端对比diff算法进行优化
+        // // 2.利用双端对比diff算法进行优化
+        // patchkeyedChildren(oldChildren, newChildren, container);
+        // // 双端对比diff算法
+        // function patchkeyedChildren(
+        //   oldChildren: any,
+        //   newChildren: any,
+        //   container: VElement
+        // ) {
+        //   // 四种索引值
+        //   let oldStartIndex = 0;
+        //   let newStartIndex = 0;
+        //   let oldEndIndex = oldChildren.length - 1;
+        //   let newEndIndex = newChildren.length - 1;
+        //   // 四种索引值对应的虚拟node
+        //   let oldStartVnode = oldChildren[oldStartIndex];
+        //   let newStartVnode = newChildren[newStartIndex];
+        //   let oldEndVnode = oldChildren[oldEndIndex];
+        //   let newEndVnode = newChildren[newEndIndex];
+        //   while (oldStartIndex <= oldEndIndex && newStartIndex <= newEndIndex) {
+        //     // 如果旧头尾节点为undifined，则意味着已经被处理过了，则直接跳过
+        //     if (!oldStartVnode) {
+        //       oldStartVnode = oldChildren[++oldStartIndex];
+        //     } else if (!oldEndVnode) {
+        //       oldEndVnode = oldChildren[--oldEndIndex];
+        //       // 进行双端的四种比较
+        //     } else if (oldStartVnode.key === newStartVnode.key) {
+        //       patch(oldStartVnode, newStartVnode, container);
+        //       oldStartVnode = oldChildren[++oldStartIndex];
+        //       newStartVnode = newChildren[++newStartIndex];
+        //     } else if (oldEndVnode.key === newEndVnode.key) {
+        //       patch(oldEndVnode, newEndVnode, container);
+        //       oldEndVnode = oldChildren[--oldEndIndex];
+        //       newEndVnode = newChildren[--newEndIndex];
+        //     } else if (oldStartVnode.key === newEndVnode.key) {
+        //       patch(oldStartVnode, newEndVnode, container);
+        //       insert(oldStartVnode.el, container, oldEndVnode.el.nextSibling);
+        //       oldStartVnode = oldChildren[++oldStartIndex];
+        //       newEndVnode = newChildren[--newEndIndex];
+        //     } else if (oldEndVnode.key === newStartVnode.key) {
+        //       patch(oldEndVnode, newStartVnode, container);
+        //       insert(oldEndVnode.el, container, oldStartVnode.el);
+        //       oldEndVnode = oldChildren[--oldEndIndex];
+        //       newStartVnode = newChildren[++newStartIndex];
+        //     }
+        //     // 四种比较都没找到可以复用的节点，则拿着新头节点来遍历旧节点，来寻找可复用的节点
+        //     else {
+        //       const newStartInOldIndex = oldChildren.findIndex(
+        //         (vnode: Vnode) => vnode.key === newStartVnode.key
+        //       );
+        //       if (newStartInOldIndex > 0) {
+        //         const vnodeToMove = oldChildren[newStartInOldIndex];
+        //         patch(vnodeToMove, newStartVnode, container);
+        //         insert(vnodeToMove.el, container, oldStartVnode.el);
+        //         oldChildren[newStartInOldIndex] = undefined;
+        //       } else {
+        //         patch(null, newStartVnode, oldStartVnode.el);
+        //       }
+        //       newStartVnode = newChildren[++newStartIndex];
+        //     }
+        //   }
+        //   // 循环结束后，检查是否有漏掉的需要添加（挂载）的新节点 or 需要卸载的旧节点
+        //   if (oldStartIndex > oldEndIndex && newStartIndex <= newEndIndex) {
+        //     for (let i = newStartIndex; i <= newEndIndex; i++) {
+        //       const anchor = newChildren[newEndIndex + 1]
+        //         ? newChildren[newEndIndex].el
+        //         : null;
+        //       patch(null, newChildren[i], container, anchor);
+        //     }
+        //   } else if (
+        //     newStartIndex > newEndIndex &&
+        //     oldStartIndex <= oldEndIndex
+        //   ) {
+        //     for (let i = oldStartIndex; i <= oldEndIndex; i++) {
+        //       unmount(oldChildren[i]);
+        //     }
+        //   }
+        // }
+
+        // 3. 利用快速diff算法进行优化
         patchkeyedChildren(oldChildren, newChildren, container);
 
-        // 双端对比diff算法
         function patchkeyedChildren(
           oldChildren: any,
           newChildren: any,
           container: VElement
         ) {
-          // 四种索引值
-          let oldStartIndex = 0;
-          let newStartIndex = 0;
-          let oldEndIndex = oldChildren.length - 1;
+          let j = 0;
+          let newStartVnode = newChildren[j];
+          let oldStartVnode = oldChildren[j];
           let newEndIndex = newChildren.length - 1;
-          // 四种索引值对应的虚拟node
-          let oldStartVnode = oldChildren[oldStartIndex];
-          let newStartVnode = newChildren[newStartIndex];
-          let oldEndVnode = oldChildren[oldEndIndex];
+          let oldEndIndex = oldChildren.length - 1;
           let newEndVnode = newChildren[newEndIndex];
+          let oldEndVnode = oldChildren[oldEndIndex];
 
-          while (oldStartIndex <= oldEndIndex && newStartIndex <= newEndIndex) {
-            // 如果旧头尾节点为undifined，则意味着已经被处理过了，则直接跳过
-            if (!oldStartVnode) {
-              oldStartVnode = oldChildren[++oldStartIndex];
-            } else if (!oldEndVnode) {
-              oldEndVnode = oldChildren[--oldEndIndex];
-              // 进行双端的四种比较
-            } else if (oldStartVnode.key === newStartVnode.key) {
-              patch(oldStartVnode, newStartVnode, container);
-              oldStartVnode = oldChildren[++oldStartIndex];
-              newStartVnode = newChildren[++newStartIndex];
-            } else if (oldEndVnode.key === newEndVnode.key) {
-              patch(oldEndVnode, newEndVnode, container);
-              oldEndVnode = oldChildren[--oldEndIndex];
-              newEndVnode = newChildren[--newEndIndex];
-            } else if (oldStartVnode.key === newEndVnode.key) {
-              patch(oldStartVnode, newEndVnode, container);
-              insert(oldStartVnode.el, container, oldEndVnode.el.nextSibling);
-              oldStartVnode = oldChildren[++oldStartIndex];
-              newEndVnode = newChildren[--newEndIndex];
-            } else if (oldEndVnode.key === newStartVnode.key) {
-              patch(oldEndVnode, newStartVnode, container);
-              insert(oldEndVnode.el, container, oldStartVnode.el);
-              oldEndVnode = oldChildren[--oldEndIndex];
-              newStartVnode = newChildren[++newStartIndex];
+          while (newStartVnode.key === oldStartVnode.key) {
+            patch(oldStartVnode, newStartVnode, container);
+            j++;
+            newStartVnode = newChildren[j];
+            oldStartVnode = oldChildren[j];
+          }
+          while (newEndVnode.key === oldEndVnode.key) {
+            patch(oldEndVnode, newEndVnode, container);
+            newEndIndex--;
+            oldEndIndex--;
+            newEndVnode = newChildren[newEndIndex];
+            oldEndVnode = oldChildren[oldEndIndex];
+          }
+          if (oldEndIndex < j && newEndIndex >= j) {
+            const anchorIndex = newEndIndex + 1;
+            const anchor =
+              anchorIndex < newChildren.length
+                ? newChildren[anchorIndex].el
+                : null;
+            while (j <= newEndIndex) {
+              patch(null, newChildren[j++], container, anchor);
             }
-            // 四种比较都没找到可以复用的节点，则拿着新头节点来遍历旧节点，来寻找可复用的节点
-            else {
-              const newStartInOldIndex = oldChildren.findIndex(
-                (vnode: Vnode) => vnode.key === newStartVnode.key
-              );
-              if (newStartInOldIndex > 0) {
-                const vnodeToMove = oldChildren[newStartInOldIndex];
-                patch(vnodeToMove, newStartVnode, container);
-                insert(vnodeToMove.el, container, oldStartVnode.el);
-                oldChildren[newStartInOldIndex] = undefined;
+          } else if (newEndIndex < j && oldEndIndex >= j) {
+            while (j <= oldEndIndex) {
+              unmount(oldChildren[j++]);
+            }
+          } else {
+            const count = newEndIndex - j + 1;
+            const source = new Array(count);
+            source.fill(-1);
+            const keyindex = {};
+            let move = false;
+            let pos = 0;
+            let patched = 0;
+
+            for (let i = j; i <= newEndIndex; i++) {
+              keyindex[newChildren[i].key] = i;
+            }
+            for (let i = j; i <= oldEndIndex; i++) {
+              const oldVnode = oldChildren[i];
+              if (patched <= count) {
+                const k = keyindex[oldVnode.key];
+                if (typeof k != 'undefined') {
+                  const newVnode = newChildren[k];
+                  patch(oldVnode, newVnode, container);
+                  patched++;
+                  source[k - j] = i;
+                  if (k < pos) {
+                    move = true;
+                  } else {
+                    pos = k;
+                  }
+                } else {
+                  unmount(oldVnode);
+                }
               } else {
-                patch(null, newStartVnode, oldStartVnode.el);
+                unmount(oldVnode);
               }
-              newStartVnode = newChildren[++newStartIndex];
+            }
+            if (move) {
+              const seq = list(source);
+              let s = seq.length - 1;
+              let i = count - 1;
+              for (i; i >= 0; i--) {
+                if (source[i] === -1) {
+                  const newIndex = i + j;
+                  const newVnode = newChildren[newIndex];
+                  const anchor = newChildren[newIndex + 1]
+                    ? newChildren[newEndIndex + 1].el
+                    : null;
+                  patch(null, newVnode, container, anchor);
+                } else if (i !== seq[s]) {
+                  const newIndex = i + j;
+                  const newVnode = newChildren[newIndex];
+                  const anchor = newChildren[newIndex + 1]
+                    ? newChildren[newEndIndex + 1].el
+                    : null;
+                  insert(newVnode, container, anchor);
+                } else {
+                  s--;
+                }
+              }
             }
           }
-          // 循环结束后，检查是否有漏掉的需要添加（挂载）的新节点 or 需要卸载的旧节点
-          if (oldStartIndex > oldEndIndex && newStartIndex <= newEndIndex) {
-            for (let i = newStartIndex; i <= newEndIndex; i++) {
-              const anchor = newChildren[newEndIndex + 1]
-                ? newChildren[newEndIndex]
-                : null;
-              patch(null, newChildren[i], container, anchor);
-            }
-          } else if (
-            newStartIndex > newEndIndex &&
-            oldStartIndex <= oldEndIndex
-          ) {
-            for (let i = oldStartIndex; i <= oldEndIndex; i++) {
-              unmount(oldChildren[i]);
-            }
+
+          // 求给定序列的最长递增子序列
+          function list(arr: number[]) {
+            return [];
           }
         }
       }
