@@ -1,3 +1,5 @@
+import { effect, reactive, flushJob, jobQueue } from './Reactive';
+
 interface Options {
   createElement: (type: any) => VElement;
   setElementText: (el: VElement, text: string) => void;
@@ -19,11 +21,19 @@ interface Vnode {
   children?: any;
   el?: VElement;
   key?: any;
+  component?: any;
 }
 
 interface VElement extends Element {
   _vnode?: Vnode | null;
   vei?: any;
+}
+
+interface instance {
+  state: any;
+  props: any;
+  isMounted: boolean;
+  subTree: any;
 }
 
 const Text = Symbol();
@@ -109,10 +119,14 @@ function createRenderer(options: Options) {
         patchChildren(oldVnode, newVnode, container);
       }
     }
-
     // 处理组件
-    // if (typeof type === 'object') {
-    // }
+    else if (typeof type === 'object') {
+      if (!oldVnode) {
+        mountComponent(newVnode, container);
+      } else {
+        patchComponent(oldVnode, newVnode);
+      }
+    }
     // 处理其他类型的vnode
     // if (typeof type === 'xxx') {
     // }
@@ -148,7 +162,6 @@ function createRenderer(options: Options) {
     insert(el, container, anchor);
   }
 
-  // 更新元素
   function patchElement(oldVnode: Vnode, newVnode: Vnode) {
     const el = (newVnode.el = oldVnode.el as VElement);
     const oldProps = oldVnode.props;
@@ -167,6 +180,122 @@ function createRenderer(options: Options) {
     // 更新children
     patchChildren(oldVnode.children, newVnode.children, el);
   }
+
+  function mountComponent(
+    vnode: Vnode,
+    container: VElement,
+    anchor: any = null
+  ) {
+    const componentOptions = vnode.type;
+    const { render, data, props: propsOption } = componentOptions;
+    const state = reactive(data());
+    const [props, attrs] = resolveProps(propsOption, vnode.props);
+
+    const instance: instance = {
+      state,
+      props: reactive(props),
+      isMounted: false,
+      subTree: null,
+    };
+
+    vnode.component = instance;
+
+    const renderContext = new Proxy(instance, {
+      get(target, key, receiver) {
+        const { state, props } = target;
+        if (key in state) {
+          return state[key];
+        } else if (key in props) {
+          return props[key];
+        } else {
+          console.error('不存在');
+        }
+      },
+      set(target, key, newValue, receiver) {
+        const { state, props } = target;
+        if (key in state) {
+          state[key] = newValue;
+        } else if (key in props) {
+          props[key] = newValue;
+        } else {
+          console.error('不存在');
+        }
+        return true;
+      },
+    });
+    created && created.call(renderContext);
+    effect(
+      () => {
+        const subTree = render.call(state, state);
+        if (!instance.isMounted) {
+          beforeMounted && beforeMounted.call(renderContext);
+          patch(null, subTree, container);
+          instance.isMounted = true;
+          mounted && mounted.call(renderContext);
+        } else {
+          beforeUpdated && beforeUpdated.call(renderContext);
+          patch(instance.subTree, subTree, container);
+          updated && updated.call(renderContext);
+        }
+        instance.subTree = subTree;
+      },
+      {
+        scheduler(effect) {
+          jobQueue.add(effect);
+          flushJob();
+        },
+      }
+    );
+  }
+
+  function patchComponent(
+    oldVnode: Vnode,
+    newVnode: Vnode,
+    anchor: any = null
+  ) {
+    const instance = (newVnode.component = oldVnode.component);
+    const { props } = instance;
+    if (hasPropsChanged(oldVnode.props, newVnode.props)) {
+      const [nextProps] = resolveProps(newVnode.type.props, newVnode.props);
+      for (let key in nextProps) {
+        props[key] = nextProps[key];
+      }
+      for (let key in props) {
+        if (!(key in nextProps)) {
+          delete props[key];
+        }
+      }
+    }
+  }
+
+  function resolveProps(options: any, propsData: any) {
+    const props = {};
+    const attrs = {};
+    for (const key in propsData) {
+      if (key in options) {
+        props[key] = propsData[key];
+      } else {
+        attrs[key] = propsData[key];
+      }
+    }
+    return [props, attrs];
+  }
+
+  function hasPropsChanged(preProps: any, nextProps: any) {
+    const nextKeys = Object.keys(nextProps);
+    if (Object.keys(preProps).length !== nextKeys.length) return true;
+    for (let i = 0; i < nextKeys.length; i++) {
+      if (preProps[nextKeys[i]] !== nextProps[nextKeys[i]]) return true;
+    }
+    return false;
+  }
+
+  // 生命周期钩子函数
+  function created(component: instance) {}
+  function beforeMounted(component: instance) {}
+  function mounted(component: instance) {}
+  function beforeUpdated(component: instance) {}
+  function updated(component: instance) {}
 
   function patchChildren(
     oldChildren: any,
