@@ -34,11 +34,23 @@ interface instance {
   props: any;
   isMounted: boolean;
   subTree: any;
+  slots: any;
+  Created: any[];
+  beforeMounted: any[];
+  Mounted: any[];
+  beforeUpdated: any[];
+  Updated: any[];
 }
 
 const Text = Symbol();
 const Comment = Symbol();
 const Fragment = Symbol();
+
+let currentInstance: instance | null = null;
+
+function setCurrentInstance(instance: instance) {
+  currentInstance = instance;
+}
 
 // 创建适用于不同环境的渲染器
 function createRenderer(options: Options) {
@@ -187,16 +199,45 @@ function createRenderer(options: Options) {
     anchor: any = null
   ) {
     const componentOptions = vnode.type;
-    const { render, data, props: propsOption } = componentOptions;
-    const state = reactive(data());
+    let { render, data, props: propsOption, setup } = componentOptions;
+    const state = data ? reactive(data()) : null;
     const [props, attrs] = resolveProps(propsOption, vnode.props);
+    const slots = vnode.children ?? {};
 
     const instance: instance = {
       state,
       props: reactive(props),
       isMounted: false,
       subTree: null,
+      slots,
+      Created: [],
+      beforeMounted: [],
+      Mounted: [],
+      beforeUpdated: [],
+      Updated: [],
     };
+    function emit(event: string, ...payload: any[]) {
+      const eventName = `on${event[0].toUpperCase() + event.slice(1)}`;
+      const handler = instance.props[eventName];
+      if (handler) {
+        handler(...payload);
+      } else {
+        console.error('事件处理函数不存在');
+      }
+    }
+    const setupContext = { attrs, emit, slots };
+    setCurrentInstance(instance);
+    const setupResult = setup(props, setupContext);
+    let setupState: any = null;
+    if (typeof setupResult === 'function') {
+      if (render) {
+        console.error('setup返回渲染函数，render选项将被忽略');
+      } else {
+        render = setupResult;
+      }
+    } else {
+      setupState = setupResult;
+    }
 
     vnode.component = instance;
 
@@ -207,6 +248,10 @@ function createRenderer(options: Options) {
           return state[key];
         } else if (key in props) {
           return props[key];
+        } else if (setupState && key in setupState) {
+          return setupState[key];
+        } else if ((key = '$slots')) {
+          return instance.slots;
         } else {
           console.error('不存在');
         }
@@ -217,25 +262,32 @@ function createRenderer(options: Options) {
           state[key] = newValue;
         } else if (key in props) {
           props[key] = newValue;
+        } else if (setupState && key in setupState) {
+          setupState[key] = newValue;
         } else {
           console.error('不存在');
         }
         return true;
       },
     });
-    created && created.call(renderContext);
+    instance.Created &&
+      instance.Created.forEach((fn) => fn.call(renderContext));
     effect(
       () => {
         const subTree = render.call(state, state);
         if (!instance.isMounted) {
-          beforeMounted && beforeMounted.call(renderContext);
+          instance.beforeMounted &&
+            instance.beforeMounted.forEach((fn) => fn.call(renderContext));
           patch(null, subTree, container);
           instance.isMounted = true;
-          mounted && mounted.call(renderContext);
+          instance.Mounted &&
+            instance.Mounted.forEach((fn) => fn.call(renderContext));
         } else {
-          beforeUpdated && beforeUpdated.call(renderContext);
+          instance.beforeUpdated &&
+            instance.beforeUpdated.forEach((fn) => fn.call(renderContext));
           patch(instance.subTree, subTree, container);
-          updated && updated.call(renderContext);
+          instance.Updated &&
+            instance.Updated.forEach((fn) => fn.call(renderContext));
         }
         instance.subTree = subTree;
       },
@@ -272,7 +324,9 @@ function createRenderer(options: Options) {
     const props = {};
     const attrs = {};
     for (const key in propsData) {
-      if (key in options) {
+      if (key in propsData && key.startsWith('on')) {
+        props[key] = propsData[key];
+      } else if (key in options) {
         props[key] = propsData[key];
       } else {
         attrs[key] = propsData[key];
@@ -289,13 +343,6 @@ function createRenderer(options: Options) {
     }
     return false;
   }
-
-  // 生命周期钩子函数
-  function created(component: instance) {}
-  function beforeMounted(component: instance) {}
-  function mounted(component: instance) {}
-  function beforeUpdated(component: instance) {}
-  function updated(component: instance) {}
 
   function patchChildren(
     oldChildren: any,
@@ -658,4 +705,41 @@ function normalizeClass(oldClass: any) {
   if (type === 'string') newClass += oldClass;
   if (Array.isArray(oldClass)) handleArray(oldClass);
   return newClass;
+}
+
+// 生命周期钩子函数
+function oncreated(fn: () => void) {
+  if (currentInstance) {
+    currentInstance.Created.push(fn);
+  } else {
+    console.error('只能在setup中调用');
+  }
+}
+function onbeforeMounted(fn: () => void) {
+  if (currentInstance) {
+    currentInstance.beforeMounted.push(fn);
+  } else {
+    console.error('只能在setup中调用');
+  }
+}
+function onmounted(fn: () => void) {
+  if (currentInstance) {
+    currentInstance.Mounted.push(fn);
+  } else {
+    console.error('只能在setup中调用');
+  }
+}
+function onbeforeUpdated(fn: () => void) {
+  if (currentInstance) {
+    currentInstance.beforeUpdated.push(fn);
+  } else {
+    console.error('只能在setup中调用');
+  }
+}
+function onupdated(fn: () => void) {
+  if (currentInstance) {
+    currentInstance.Updated.push(fn);
+  } else {
+    console.error('只能在setup中调用');
+  }
 }
