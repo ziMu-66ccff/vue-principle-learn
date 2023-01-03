@@ -77,6 +77,7 @@ function traverse(value: any, seen: Set<any> = new Set()) {
   for (let k in value) {
     traverse(value[k], seen);
   }
+  return value;
 }
 
 //测试1

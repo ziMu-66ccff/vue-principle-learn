@@ -42,9 +42,9 @@ interface instance {
   Updated: any[];
 }
 
-const Text = Symbol();
-const Comment = Symbol();
-const Fragment = Symbol();
+export const Text = Symbol();
+export const Comment = Symbol();
+export const Fragment = Symbol();
 
 let currentInstance: instance | null = null;
 
@@ -132,7 +132,7 @@ function createRenderer(options: Options) {
       }
     }
     // 处理组件
-    else if (typeof type === 'object') {
+    else if (typeof type === 'object' || typeof type === 'function') {
       if (!oldVnode) {
         mountComponent(newVnode, container);
       } else {
@@ -142,16 +142,6 @@ function createRenderer(options: Options) {
     // 处理其他类型的vnode
     // if (typeof type === 'xxx') {
     // }
-  }
-
-  function unmount(vnode: Vnode) {
-    if (vnode.type === Fragment) {
-      vnode.children.forEach((vnode: Vnode) => unmount(vnode));
-    }
-    const parent = vnode.el?.parentNode;
-    if (parent) {
-      parent.removeChild(vnode.el as VElement);
-    }
   }
 
   function mountElement(vnode: Vnode, container: VElement, anchor: any = null) {
@@ -198,7 +188,16 @@ function createRenderer(options: Options) {
     container: VElement,
     anchor: any = null
   ) {
-    const componentOptions = vnode.type;
+    let componentOptions: any = null;
+    const isFunctional = typeof vnode.type === 'function';
+    if (isFunctional) {
+      componentOptions = {
+        render: vnode.type,
+        props: vnode.type.props,
+      };
+    } else {
+      componentOptions = vnode.type;
+    }
     let { render, data, props: propsOption, setup } = componentOptions;
     const state = data ? reactive(data()) : null;
     const [props, attrs] = resolveProps(propsOption, vnode.props);
@@ -606,6 +605,20 @@ function createRenderer(options: Options) {
   };
 }
 
+export function unmount(vnode: Vnode) {
+  if (vnode.type === Fragment) {
+    vnode.children.forEach((vnode: Vnode) => unmount(vnode));
+    return;
+  } else if (typeof vnode.type === 'object') {
+    unmount(vnode.component.subTree);
+    return;
+  }
+  const parent = vnode.el?.parentNode;
+  if (parent) {
+    parent.removeChild(vnode.el as VElement);
+  }
+}
+
 // 用于浏览器环境的渲染器
 export const DOMRender = createRenderer({
   createElement(type: any) {
@@ -743,3 +756,5 @@ function onupdated(fn: () => void) {
     console.error('只能在setup中调用');
   }
 }
+
+export function onUnmounted(fn: () => any) {}

@@ -1,6 +1,6 @@
 import { reactive } from './Reactive';
 
-function ref(val: any) {
+export function ref(val: any) {
   const wrapper = {
     value: val,
   };
